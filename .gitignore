@@ -32,3 +32,4 @@ cache/
 *.key
 config.php
 database.php
+install.php
