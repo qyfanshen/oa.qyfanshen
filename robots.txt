@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /install/
+Disallow: /config/
+Disallow: /storage/
+Sitemap: https://your-domain.com/sitemap.xml
