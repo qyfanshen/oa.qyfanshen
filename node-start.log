@@ -1,0 +1,9 @@
+nohup: ignoring input
+
+> fanshen-oa@0.1.0 start
+> next start -p 3000
+
+▲ Next.js 16.2.9
+- Local:         http://localhost:3000
+- Network:       http://172.27.77.136:3000
+✓ Ready in 149ms
