@@ -34,7 +34,7 @@
     "eslint-config-next": "^16.2.9",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.1",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "description": "梵燊集团 OA 办公自动化系统",
   "keywords": ["oa", "nextjs", "office-automation"],
