@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
         try {
           for await (const delta of chatStream({
             messages,
+            model: AI_CONFIG.llm.model,
             temperature: AI_CONFIG.chat.temperature,
             maxTokens: AI_CONFIG.chat.maxTokens,
           })) {

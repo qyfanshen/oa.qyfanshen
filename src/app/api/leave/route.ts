@@ -1,15 +1,14 @@
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2";
-import { SESSION_COOKIE, readSession } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { buildLeaveSteps } from "@/lib/approval-flow";
 
 export const runtime = "nodejs";
 
-async function sessionFor(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  return token ? readSession(token) : null;
+function sessionFor(request: NextRequest) {
+  return getSessionFromRequest(request);
 }
 
 async function employeeId(accountId: number) {
@@ -63,9 +62,19 @@ export async function POST(request: NextRequest) {
   const [deptRows] = await getDb().execute<RowDataPacket[]>("SELECT department FROM employees WHERE id = ? LIMIT 1", [employee]);
   const department = (deptRows[0]?.department as string) || "";
   // 方案 2：按请假类型 + 天数动态生成审批步骤
-  const steps = await buildLeaveSteps(type as "annual" | "sick" | "personal" | "marriage" | "bereavement" | "maternity" | "other", days, department);
-  const db = getDb();
-  await db.execute("INSERT INTO leave_requests (id, employee_id, leave_type, start_date, end_date, days, reason) VALUES (?, ?, ?, ?, ?, ?, ?)", [id, employee, type, startDate, endDate, days, reason]);
-  await db.execute("INSERT INTO approval_requests (id, flow_id, applicant_id, title, content, approval_type, status, current_step, steps) VALUES (?, 'leave', ?, ?, ?, 'leave', 'pending', 0, ?)", [id, employee, `${labels[type]}申请`, `${startDate} 至 ${endDate}，共 ${days} 天：${reason}`, JSON.stringify(steps)]);
+  const steps = await buildLeaveSteps(type as "annual" | "sick" | "personal" | "marriage" | "bereavement" | "maternity" | "other", days, department, employee);
+  const pool = getDb();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute("INSERT INTO leave_requests (id, employee_id, leave_type, start_date, end_date, days, reason) VALUES (?, ?, ?, ?, ?, ?, ?)", [id, employee, type, startDate, endDate, days, reason]);
+    await conn.execute("INSERT INTO approval_requests (id, flow_id, applicant_id, title, content, approval_type, status, current_step, steps) VALUES (?, 'leave', ?, ?, ?, 'leave', 'pending', 0, ?)", [id, employee, `${labels[type]}申请`, `${startDate} 至 ${endDate}，共 ${days} 天：${reason}`, JSON.stringify(steps)]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
   return NextResponse.json({ id }, { status: 201 });
 }

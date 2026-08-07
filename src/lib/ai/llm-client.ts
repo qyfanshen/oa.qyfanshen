@@ -1,6 +1,6 @@
 /**
  * 统一的 LLM 调用客户端
- * 当前只支持 DeepSeek（OpenAI 兼容协议）
+ * 当前支持 DeepSeek 官方 API 和火山引擎方舟 API
  *
  * 演示模式：当环境变量 AI_DEMO_MODE=true 时，不调真实 LLM
  *   基于文档内容片段返回合理的模拟输出（用于没钱/无 Key 时演示 UI）
@@ -18,6 +18,7 @@ export interface ChatRequest {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  model?: string;
 }
 
 export interface ChatResponse {
@@ -131,7 +132,7 @@ function generateDemoResponse(req: ChatRequest): string {
 您的提问已收到。由于当前 AI_DEMO_MODE=true，返回的是演示数据。
 
 要获得基于文档的智能回答，请：
-1. 前往 https://platform.deepseek.com 充值账户
+1. 前往 LLM 服务商（DeepSeek / 火山引擎方舟）充值账户
 2. 或在 .env.local 中删除 AI_DEMO_MODE=true
 3. 重新加载页面
 
@@ -151,19 +152,19 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
     };
   }
 
-  const { deepseek } = AI_CONFIG;
-  if (!deepseek.apiKey) {
-    throw new Error("DEEPSEEK_API_KEY 未配置");
+  const { llm } = AI_CONFIG;
+  if (!llm.apiKey) {
+    throw new Error("LLM_API_KEY 未配置");
   }
 
-  const resp = await fetch(`${deepseek.baseUrl}/chat/completions`, {
+  const resp = await fetch(`${llm.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${deepseek.apiKey}`,
+      Authorization: `Bearer ${llm.apiKey}`,
     },
     body: JSON.stringify({
-      model: deepseek.model,
+      model: request.model || llm.model,
       messages: request.messages,
       temperature: request.temperature ?? 0.5,
       max_tokens: request.maxTokens ?? 2000,
@@ -173,7 +174,7 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
 
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`DeepSeek API 错误 ${resp.status}: ${errText}`);
+    throw new Error(`LLM API 错误 ${resp.status}: ${errText}`);
   }
 
   const data = await resp.json();
@@ -198,19 +199,19 @@ export async function* chatStream(request: ChatRequest): AsyncGenerator<string, 
     return;
   }
 
-  const { deepseek } = AI_CONFIG;
-  if (!deepseek.apiKey) {
-    throw new Error("DEEPSEEK_API_KEY 未配置");
+  const { llm } = AI_CONFIG;
+  if (!llm.apiKey) {
+    throw new Error("LLM_API_KEY 未配置");
   }
 
-  const resp = await fetch(`${deepseek.baseUrl}/chat/completions`, {
+  const resp = await fetch(`${llm.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${deepseek.apiKey}`,
+      Authorization: `Bearer ${llm.apiKey}`,
     },
     body: JSON.stringify({
-      model: deepseek.model,
+      model: request.model || llm.model,
       messages: request.messages,
       temperature: request.temperature ?? 0.5,
       max_tokens: request.maxTokens ?? 2000,
@@ -220,7 +221,7 @@ export async function* chatStream(request: ChatRequest): AsyncGenerator<string, 
 
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`DeepSeek API 错误 ${resp.status}: ${errText}`);
+    throw new Error(`LLM API 错误 ${resp.status}: ${errText}`);
   }
   if (!resp.body) {
     throw new Error("流式响应为空");

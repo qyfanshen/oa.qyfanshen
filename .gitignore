@@ -1,35 +1,55 @@
+# 依赖
+node_modules
+
+# Next.js 构建产物
+.next
+out
+
+# 环境变量（含密钥，禁止提交）
 .env
 .env.local
+.env*.local
 .env.*.local
-storage/*.db
-storage/*.db*
-storage/*.sqlite
-*.db
-*.sqlite
+
+# 日志文件
 *.log
-logs/
-log/
-error_log
-access_log
-node_modules/
-vendor/
-.next/
-dist/
-build/
-out/
-.cache/
+.next-*.log
+.dev_server.log
+node-start.log
+
+# 备份文件
+*.bak
+*.bak.*
+*.bak2
+
+# TypeScript 构建缓存
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# AI 文件缓存（运行时生成）
+.ai-cache
+
+# 上传文件缓存（运行时生成）
+uploads/cache
+
+# 系统/编辑器
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
+
+# 误操作产生的命令输出文件（如 npm 误把版本号当命令产生的同名文件）
+12.0.2
+fanshen-oa@*
+# PHP 环境配置（如有）
 .user.ini
-*.swp
-*~
-.well-known/acme-challenge/
-uploads/
-temp/
-tmp/
-cache/
-*.pem
-*.key
-config.php
-database.php
-install.php
+
+# 支付/业务密钥
+storage/payment.key
+storage/
+
+# Windows 保留设备名（防止误提交）
+nul
+con
+prn
+aux

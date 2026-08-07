@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   // 2. 检查 AI 配置
   if (!isAIConfigured()) {
     return NextResponse.json(
-      { message: "AI 服务未配置（缺少 DEEPSEEK_API_KEY）。" },
+      { message: "AI 服务未配置（缺少 API Key）。" },
       { status: 503 }
     );
   }
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
         { role: "system", content: PROMPTS.summary(doc.name) },
         { role: "user", content: truncated },
       ],
+      model: AI_CONFIG.llm.summaryModel,
       temperature: AI_CONFIG.summary.temperature,
       maxTokens: AI_CONFIG.summary.maxTokens,
     });

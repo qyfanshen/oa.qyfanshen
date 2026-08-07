@@ -97,9 +97,19 @@ export async function POST(request: NextRequest) {
   const [deptRows] = await getDb().execute<RowDataPacket[]>("SELECT department FROM employees WHERE id = ? LIMIT 1", [employee]);
   const department = (deptRows[0]?.department as string) || "";
   // 方案 A：按金额动态生成审批步骤
-  const steps = await buildExpenseSteps(amount, department);
-  const db = getDb();
-  await db.execute("INSERT INTO expense_reports (id, employee_id, expense_type, amount, expense_date, description, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)", [id, employee, type, amount, date, description, JSON.stringify(attachments)]);
-  await db.execute("INSERT INTO approval_requests (id, flow_id, applicant_id, title, content, approval_type, amount, status, current_step, steps, attachments) VALUES (?, 'expense', ?, ?, ?, 'expense', ?, 'pending', 0, ?, ?)", [id, employee, `${labels[type]}报销申请`, `${date}：${description}`, amount, JSON.stringify(steps), JSON.stringify(attachments)]);
+  const steps = await buildExpenseSteps(amount, department, employee);
+  const pool = getDb();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute("INSERT INTO expense_reports (id, employee_id, expense_type, amount, expense_date, description, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)", [id, employee, type, amount, date, description, JSON.stringify(attachments)]);
+    await conn.execute("INSERT INTO approval_requests (id, flow_id, applicant_id, title, content, approval_type, amount, status, current_step, steps, attachments) VALUES (?, 'expense', ?, ?, ?, 'expense', ?, 'pending', 0, ?, ?)", [id, employee, `${labels[type]}报销申请`, `${date}：${description}`, amount, JSON.stringify(steps), JSON.stringify(attachments)]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
   return NextResponse.json({ id }, { status: 201 });
 }

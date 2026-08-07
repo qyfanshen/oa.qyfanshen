@@ -11,9 +11,9 @@ const statusColors: Record<User["status"], string> = {
 };
 const statusLabels: Record<User["status"], string> = { active: "在职", inactive: "离职" };
 const roleColors: Record<User["role"], string> = {
-  admin: "bg-purple-100 text-purple-700", manager: "bg-blue-100 text-blue-700", employee: "bg-gray-100 text-gray-600",
+  superadmin: "bg-red-100 text-red-700", admin: "bg-purple-100 text-purple-700", manager: "bg-blue-100 text-blue-700", employee: "bg-gray-100 text-gray-600",
 };
-const roleLabels: Record<User["role"], string> = { admin: "管理员", manager: "经理", employee: "员工" };
+const roleLabels: Record<User["role"], string> = { superadmin: "超级管理员", admin: "管理员", manager: "经理", employee: "员工" };
 
 type EmployeeForm = Pick<User, "name" | "department" | "position" | "email" | "phone" | "role">;
 const emptyForm: EmployeeForm = { name: "", department: "", position: "", email: "", phone: "", role: "employee" };

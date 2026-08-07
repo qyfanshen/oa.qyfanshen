@@ -2,20 +2,19 @@
  * AI 助手相关数据库表初始化脚本
  * 使用方法：node scripts/init-ai-tables.js
  */
-const mysql = require('mysql2/promise');
-require('dotenv').config({ path: '.env.local' });
+const fs = require("fs");
+const path = require("path");
+const mysql = require("mysql2/promise");
 
-const dbConfig = {
-  host: process.env.MYSQL_HOST || '127.0.0.1',
-  port: parseInt(process.env.MYSQL_PORT || '3306', 10),
-  user: process.env.MYSQL_USER || 'fanshen_oa_app',
-  password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'fanshen_oa',
-  multipleStatements: true,
-};
+const envFile = path.join(process.cwd(), ".env.local");
+if (fs.existsSync(envFile)) {
+  for (const line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (match && !process.env[match[1]]) process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, "");
+  }
+}
 
 const TABLES = [
-  // 文档摘要缓存
   `CREATE TABLE IF NOT EXISTS ai_summaries (
     id INT AUTO_INCREMENT PRIMARY KEY,
     document_id VARCHAR(64) NOT NULL UNIQUE,
@@ -26,7 +25,6 @@ const TABLES = [
     INDEX idx_document (document_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // 文档思维导图缓存
   `CREATE TABLE IF NOT EXISTS ai_mindmaps (
     id INT AUTO_INCREMENT PRIMARY KEY,
     document_id VARCHAR(64) NOT NULL UNIQUE,
@@ -37,7 +35,6 @@ const TABLES = [
     INDEX idx_document (document_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // 推荐问题缓存
   `CREATE TABLE IF NOT EXISTS ai_suggested_questions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     document_id VARCHAR(64) NOT NULL UNIQUE,
@@ -47,7 +44,6 @@ const TABLES = [
     INDEX idx_document (document_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // 对话会话
   `CREATE TABLE IF NOT EXISTS ai_conversations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     document_id VARCHAR(64) NOT NULL,
@@ -60,7 +56,6 @@ const TABLES = [
     INDEX idx_updated (updated_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // 对话消息
   `CREATE TABLE IF NOT EXISTS ai_messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
     conversation_id INT NOT NULL,
@@ -73,22 +68,32 @@ const TABLES = [
 ];
 
 async function main() {
+  const host = process.env.DB_HOST || "127.0.0.1";
+  const port = Number(process.env.DB_PORT || 3306);
+  const user = process.env.DB_USER;
+  const password = process.env.DB_PASSWORD;
+  const database = process.env.DB_NAME;
+
+  if (!user || !database) {
+    console.error("[init-ai] 缺少 DB_USER 或 DB_NAME 环境变量");
+    process.exit(1);
+  }
+
   let conn;
   try {
-    console.log('[init-ai] connecting to MySQL...');
-    conn = await mysql.createConnection(dbConfig);
-    console.log('[init-ai] connected, creating tables...');
+    console.log("[init-ai] connecting to MySQL...");
+    conn = await mysql.createConnection({ host, port, user, password, database, charset: "utf8mb4" });
+    console.log("[init-ai] connected, creating tables...");
 
     for (const sql of TABLES) {
-      await conn.query(sql);
-      // 提取表名用于日志
+      await conn.execute(sql);
       const m = sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/);
-      console.log(`[init-ai] ✓ ${m ? m[1] : 'table'} ready`);
+      console.log(`[init-ai] ✓ ${m ? m[1] : "table"} ready`);
     }
 
-    console.log('[init-ai] all tables created successfully');
+    console.log("[init-ai] all tables created successfully");
   } catch (err) {
-    console.error('[init-ai] failed:', err.message);
+    console.error("[init-ai] failed:", err.message);
     process.exit(1);
   } finally {
     if (conn) await conn.end();

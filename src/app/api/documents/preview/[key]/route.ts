@@ -6,8 +6,9 @@ import { createHash } from "crypto";
 import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { RowDataPacket } from "mysql2";
-import { SESSION_COOKIE, readSession } from "@/lib/auth";
+import { SESSION_COOKIE, readSession, getSessionFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { canAccessDocument } from "@/lib/documentAccess";
 
 const execAsync = promisify(exec);
 
@@ -121,8 +122,7 @@ export async function GET(
   { params }: { params: Promise<{ key: string }> }
 ) {
   // 1. 鉴权
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await readSession(token) : null;
+  const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ message: "请先登录后再预览。" }, { status: 401 });
   }
@@ -138,6 +138,12 @@ export async function GET(
   // 3. 安全检查
   if (storageKey.includes("..") || storageKey.includes("/") || storageKey.includes("\\")) {
     return NextResponse.json({ message: "非法文件名。" }, { status: 400 });
+  }
+
+  // 3.5 文档可见性权限检查
+  const allowed = await canAccessDocument(storageKey, session.id, session.role);
+  if (!allowed) {
+    return NextResponse.json({ message: "无权访问此文档。" }, { status: 403 });
   }
 
   const ext = path.extname(storageKey).toLowerCase().replace(".", "");

@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { SESSION_COOKIE, readSession } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -18,16 +18,24 @@ function createPassword() {
 }
 
 export async function GET(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await readSession(token) : null;
-  if (!session || !["admin", "superadmin"].includes(session.role)) return NextResponse.json({ message: "仅管理员可以查看员工资料。" }, { status: 403 });
-  const [rows] = await getDb().execute<RowDataPacket[]>("SELECT id, employee_no AS employeeNo, name, email, phone, department, position, role, status, DATE_FORMAT(join_date, '%Y-%m-%d') AS joinDate FROM employees ORDER BY created_at DESC");
+  const session = await getSessionFromRequest(request);
+  if (!session) return NextResponse.json({ message: "请先登录" }, { status: 401 });
+
+  const isBasic = request.nextUrl.searchParams.get("basic") === "1";
+  // 简化列表（仅 id/name/department/position）允许所有登录用户访问（用于"指定可见人"选择）
+  if (!isBasic && !["admin", "superadmin"].includes(session.role)) {
+    return NextResponse.json({ message: "仅管理员可以查看员工资料。" }, { status: 403 });
+  }
+
+  const sql = isBasic
+    ? "SELECT id, name, department, position FROM employees WHERE status = 'active' ORDER BY department, name"
+    : "SELECT id, employee_no AS employeeNo, name, email, phone, department, position, role, status, DATE_FORMAT(join_date, '%Y-%m-%d') AS joinDate FROM employees ORDER BY created_at DESC";
+  const [rows] = await getDb().execute<RowDataPacket[]>(sql);
   return NextResponse.json({ employees: rows });
 }
 
 export async function POST(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await readSession(token) : null;
+  const session = await getSessionFromRequest(request);
   if (!session || !["admin", "superadmin"].includes(session.role)) return NextResponse.json({ message: "仅管理员可以创建员工账号。" }, { status: 403 });
 
   let input: Input;

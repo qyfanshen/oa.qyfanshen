@@ -19,7 +19,7 @@ const submitTypes = [
   { value: "travel",    label: "出差申请" },
   { value: "purchase",  label: "采购申请" },
   { value: "contract",  label: "合同申请" },
-  { value: "seal",      label: "用章申请" },
+  // 用章申请走独立"公章审批"页面，不在"我的申请"中发起
 ];
 
 const statusMap: Record<string, string> = {

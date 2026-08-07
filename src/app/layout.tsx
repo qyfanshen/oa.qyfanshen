@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearClientSession, getClientSession } from "@/lib/client-session";
+import NotificationBell from "@/components/common/NotificationBell";
 
 const menuItems = [
   { 
@@ -86,10 +87,26 @@ const menuItems = [
     )
   },
   {
+    key: "/chat", label: "消息",
+    icon: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    )
+  },
+  {
     key: "/expenses", label: "费用报销",
     icon: () => (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+    )
+  },
+  {
+    key: "/seal", label: "公章审批",
+    icon: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
       </svg>
     )
   },
@@ -112,6 +129,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const [sessionUser, setSessionUser] = useState<{ name: string; role: string } | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
     if (pathname === "/login") return;
@@ -131,6 +149,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (demoRole === "employee" && pathname === "/") router.replace("/attendance");
   }, [demoRole, pathname, router]);
+
+  // 轮询聊天未读数（30s）
+  useEffect(() => {
+    if (pathname === "/login") return;
+    const fetchUnread = () => {
+      fetch("/api/chat/conversations", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          const total = (d.conversations || []).reduce((a: number, c: any) => a + (Number(c.unread) || 0), 0);
+          setChatUnread(total);
+        })
+        .catch(() => {});
+    };
+    fetchUnread();
+    const t = setInterval(fetchUnread, 30000);
+    return () => clearInterval(t);
+  }, [pathname]);
 
   const shownName = sessionUser?.name ?? "";
   const shownRole = sessionUser?.role === "superadmin" ? "公司总账号" : sessionUser?.role === "admin" ? "系统管理员" : sessionUser?.role === "manager" ? "部门主管" : "员工";
@@ -206,6 +241,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   >
                     <span className="shrink-0">{item.icon()}</span>
                     {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+                    {item.key === "/chat" && chatUnread > 0 && (
+                      <span className="ml-auto shrink-0 min-w-[20px] h-[20px] px-1.5 rounded-full bg-red-500 text-white text-[10px] leading-[20px] font-semibold text-center">
+                        {chatUnread > 99 ? "99+" : chatUnread}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -242,12 +282,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
               <div className="flex shrink-0 items-center gap-4">
                 {/* Notifications */}
-                <button className="relative p-2 text-gray-500 hover:text-[#1e3a5f] hover:bg-gray-100 rounded-lg transition-colors">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-                  </svg>
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500"></span>
-                </button>
+                <NotificationBell />
                 {/* User */}
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-[#0ea5e9] flex items-center justify-center text-white font-medium text-sm">

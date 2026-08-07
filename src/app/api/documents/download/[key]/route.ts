@@ -3,8 +3,9 @@ import path from "path";
 import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { RowDataPacket } from "mysql2";
-import { SESSION_COOKIE, readSession } from "@/lib/auth";
+import { SESSION_COOKIE, readSession, getSessionFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { canAccessDocument } from "@/lib/documentAccess";
 
 export const runtime = "nodejs";
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -56,8 +57,7 @@ export async function GET(
   { params }: { params: Promise<{ key: string }> }
 ) {
   // 1. 鉴权检查
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await readSession(token) : null;
+  const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ message: "请先登录后再下载。" }, { status: 401 });
   }
@@ -82,6 +82,12 @@ export async function GET(
     fileStat = statSync(filePath);
   } catch {
     return NextResponse.json({ message: "文件不存在或已被删除。" }, { status: 404 });
+  }
+
+  // 4.5 文档可见性权限检查（公开/上传者/viewers 列表）
+  const allowed = await canAccessDocument(storageKey, session.id, session.role);
+  if (!allowed) {
+    return NextResponse.json({ message: "无权访问此文档。" }, { status: 403 });
   }
 
   // 5. 从数据库获取原始文件名（用于下载时显示）

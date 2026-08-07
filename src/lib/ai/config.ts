@@ -1,21 +1,34 @@
 /**
  * AI 服务统一配置
- * 集中管理 LLM API Key、模型参数等
+ * 支持 DeepSeek 官方 API 和火山引擎方舟 API
+ * 通过环境变量 LLM_PROVIDER 选择：deepseek | ark
  */
 
+const provider = process.env.LLM_PROVIDER || "ark";
+
+const arkConfig = {
+  apiKey: process.env.DEEPSEEK_API_KEY || "",
+  baseUrl: process.env.LLM_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
+  model: process.env.LLM_MODEL || "doubao-pro-32k",
+  mindmapModel: process.env.LLM_MINDMAP_MODEL || "doubao-pro-32k",
+  summaryModel: process.env.LLM_SUMMARY_MODEL || "doubao-pro-32k",
+};
+
+const deepseekConfig = {
+  apiKey: process.env.DEEPSEEK_API_KEY || "",
+  baseUrl: process.env.LLM_BASE_URL || "https://api.deepseek.com",
+  model: process.env.LLM_MODEL || "deepseek-chat",
+  mindmapModel: process.env.LLM_MINDMAP_MODEL || "deepseek-chat",
+  summaryModel: process.env.LLM_SUMMARY_MODEL || "deepseek-chat",
+};
+
 export const AI_CONFIG = {
-  deepseek: {
-    apiKey: process.env.DEEPSEEK_API_KEY || "",
-    baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
-    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
-    // 思维导图、问答等可换用更快的模型
-    mindmapModel: process.env.DEEPSEEK_MINDMAP_MODEL || "deepseek-chat",
-    summaryModel: process.env.DEEPSEEK_SUMMARY_MODEL || "deepseek-chat",
-  },
+  provider,
+  llm: provider === "ark" ? arkConfig : deepseekConfig,
   // 文本分块参数
   chunking: {
-    maxChunkSize: 1500, // 每块最大字符数
-    overlap: 200,       // 块间重叠字符
+    maxChunkSize: 1500,
+    overlap: 200,
   },
   // 摘要参数
   summary: {
@@ -31,10 +44,11 @@ export const AI_CONFIG = {
   chat: {
     maxTokens: 2000,
     temperature: 0.5,
-    maxContextChunks: 6, // 最多拼接的段落数
+    maxContextChunks: 6,
   },
 };
 
 export function isAIConfigured(): boolean {
-  return Boolean(AI_CONFIG.deepseek.apiKey);
+  const demoMode = process.env.AI_DEMO_MODE === "true" || process.env.AI_DEMO_MODE === "1";
+  return demoMode || Boolean(AI_CONFIG.llm.apiKey);
 }

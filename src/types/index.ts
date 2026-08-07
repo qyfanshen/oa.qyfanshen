@@ -8,7 +8,7 @@ export interface User {
   avatar?: string;
   department: string;
   position: string;
-  role: 'admin' | 'manager' | 'employee';
+  role: 'superadmin' | 'admin' | 'manager' | 'employee';
   status: 'active' | 'inactive';
   joinDate: string;
   employeeNo: string;
@@ -33,7 +33,7 @@ export interface LeaveRequest {
   endDate: string;
   days: number;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'processing' | 'approved' | 'rejected';
   approverId?: string;
   approvedAt?: string;
   comment?: string;
@@ -56,7 +56,7 @@ export interface ApprovalStep {
   approverId: string;       // 真实审批人 employeeId（创建时由流程引擎按角色解析填入）
   approverName: string;     // 审批人姓名
   approverRole: 'manager' | 'director' | 'finance' | 'ceo' | 'hrd' | 'board';  // 审批人角色
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'processing' | 'approved' | 'rejected';
   comment?: string;
   approvedAt?: string;
 }
@@ -158,8 +158,23 @@ export interface ExpenseReport {
   amount: number;
   description: string;
   date: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'processing' | 'approved' | 'rejected';
   attachments?: string[];
+  createdAt: string;
+}
+
+export interface SealRequest {
+  id: string;
+  userId: string;
+  type: 'company' | 'contract' | 'finance' | 'legal_person' | 'department';
+  documentName: string;
+  copies: number;
+  purpose: string;
+  urgency: 'normal' | 'urgent';
+  status: 'pending' | 'processing' | 'approved' | 'rejected';
+  approverId?: string;
+  approvedAt?: string;
+  comment?: string;
   createdAt: string;
 }
 

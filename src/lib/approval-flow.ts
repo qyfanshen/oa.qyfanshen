@@ -40,9 +40,15 @@ interface EmployeeRow extends RowDataPacket {
  */
 function expenseRolesByAmount(amount: number): ApproverRole[] {
   const roles: ApproverRole[] = ["manager"];
-  if (amount > 500) roles.push("director", "finance");
-  if (amount > 3000) roles.push("ceo");
-  if (amount > 10000) roles.push("board");
+  if (amount <= 500) {
+    roles.push("finance");
+  } else if (amount <= 3000) {
+    roles.push("director", "finance");
+  } else if (amount <= 10000) {
+    roles.push("director", "finance", "ceo");
+  } else {
+    roles.push("director", "finance", "ceo", "board");
+  }
   return roles;
 }
 
@@ -104,7 +110,7 @@ function leaveFlowByTypeAndDays(type: LeaveType, days: number): ApproverRole[] {
  *   hrd         → position LIKE '%人事%' 或 '%HR%'
  *   board       → position LIKE '%董事%'
  */
-async function findApproverByRole(role: ApproverRole, department: string): Promise<{ id: string; name: string } | null> {
+async function findApproverByRole(role: ApproverRole, department: string, excludeEmployeeId?: string): Promise<{ id: string; name: string } | null> {
   const patterns: Record<ApproverRole, string[]> = {
     manager: ["经理", "主管"],
     director: ["总监"],
@@ -114,19 +120,25 @@ async function findApproverByRole(role: ApproverRole, department: string): Promi
     board: ["董事"],
   };
   const db = getDb();
+  const excludeClause = excludeEmployeeId ? "AND id <> ?" : "";
+  const excludeParams = excludeEmployeeId ? [excludeEmployeeId] : [];
   // 优先找同部门；找不到再跨部门找
   for (const scope of [department, ""]) {
     for (const keyword of patterns[role]) {
       const sql = scope
-        ? "SELECT id, name FROM employees WHERE status = 'active' AND department = ? AND position LIKE ? LIMIT 1"
-        : "SELECT id, name FROM employees WHERE status = 'active' AND position LIKE ? LIMIT 1";
-      const params = scope ? [scope, `%${keyword}%`] : [`%${keyword}%`];
+        ? `SELECT id, name FROM employees WHERE status = 'active' AND department = ? AND position LIKE ? ${excludeClause} LIMIT 1`
+        : `SELECT id, name FROM employees WHERE status = 'active' AND position LIKE ? ${excludeClause} LIMIT 1`;
+      const params = scope ? [scope, `%${keyword}%`, ...excludeParams] : [`%${keyword}%`, ...excludeParams];
       const [rows] = await db.execute<EmployeeRow[]>(sql, params);
       if (rows[0]) return { id: rows[0].id, name: rows[0].name };
     }
   }
-  // 实在找不到就用 admin 兜底
-  const [adminRows] = await db.execute<EmployeeRow[]>("SELECT id, name FROM employees WHERE role IN ('admin', 'superadmin') AND status = 'active' LIMIT 1");
+  // 实在找不到就用 admin 兜底（排除申请人）
+  const adminSql = excludeEmployeeId
+    ? "SELECT id, name FROM employees WHERE role IN ('admin', 'superadmin') AND status = 'active' AND id <> ? LIMIT 1"
+    : "SELECT id, name FROM employees WHERE role IN ('admin', 'superadmin') AND status = 'active' LIMIT 1";
+  const adminParams = excludeEmployeeId ? [excludeEmployeeId] : [];
+  const [adminRows] = await db.execute<EmployeeRow[]>(adminSql, adminParams);
   if (adminRows[0]) return { id: adminRows[0].id, name: adminRows[0].name };
   return null;
 }
@@ -134,12 +146,14 @@ async function findApproverByRole(role: ApproverRole, department: string): Promi
 /**
  * 构造报销审批步骤。
  */
-export async function buildExpenseSteps(amount: number, department: string): Promise<FlowStep[]> {
+export async function buildExpenseSteps(amount: number, department: string, applicantId?: string): Promise<FlowStep[]> {
   const roles = expenseRolesByAmount(amount);
   const steps: FlowStep[] = [];
+  const usedApproverIds = new Set<string>();
   for (let i = 0; i < roles.length; i++) {
-    const approver = await findApproverByRole(roles[i], department);
-    if (!approver) continue;
+    const approver = await findApproverByRole(roles[i], department, applicantId);
+    if (!approver || usedApproverIds.has(approver.id)) continue;
+    usedApproverIds.add(approver.id);
     steps.push({
       order: i,
       approverId: approver.id,
@@ -147,11 +161,6 @@ export async function buildExpenseSteps(amount: number, department: string): Pro
       approverRole: roles[i],
       status: "pending",
     });
-  }
-  // 兜底：没有任何审批人时塞一个 admin
-  if (steps.length === 0) {
-    const fallback = await findApproverByRole("ceo", department) ?? { id: "admin", name: "管理员" };
-    steps.push({ order: 0, approverId: fallback.id, approverName: fallback.name, approverRole: "ceo", status: "pending" });
   }
   return steps;
 }
@@ -174,12 +183,14 @@ export function matchLeaveTemplateId(type: LeaveType, days: number): string {
 /**
  * 构造请假审批步骤。
  */
-export async function buildLeaveSteps(type: LeaveType, days: number, department: string): Promise<FlowStep[]> {
+export async function buildLeaveSteps(type: LeaveType, days: number, department: string, applicantId?: string): Promise<FlowStep[]> {
   const roles = leaveFlowByTypeAndDays(type, days);
   const steps: FlowStep[] = [];
+  const usedApproverIds = new Set<string>();
   for (let i = 0; i < roles.length; i++) {
-    const approver = await findApproverByRole(roles[i], department);
-    if (!approver) continue;
+    const approver = await findApproverByRole(roles[i], department, applicantId);
+    if (!approver || usedApproverIds.has(approver.id)) continue;
+    usedApproverIds.add(approver.id);
     steps.push({
       order: i,
       approverId: approver.id,
@@ -188,9 +199,46 @@ export async function buildLeaveSteps(type: LeaveType, days: number, department:
       status: "pending",
     });
   }
-  if (steps.length === 0) {
-    const fallback = await findApproverByRole("ceo", department) ?? { id: "admin", name: "管理员" };
-    steps.push({ order: 0, approverId: fallback.id, approverName: fallback.name, approverRole: "ceo", status: "pending" });
+  return steps;
+}
+
+/**
+ * 公章审批类型枚举
+ */
+export type SealType = "company" | "contract" | "finance" | "legal_person" | "department";
+
+/**
+ * 公章审批按印章类型分层：
+ *   部门章 (department):     部门经理
+ *   合同章 (contract):      部门经理 → 行政总监
+ *   财务章 (finance):       部门经理 → 行政总监
+ *   公章 (company):         部门经理 → 行政总监 → 总经理
+ *   法人章 (legal_person):  部门经理 → 行政总监 → 总经理
+ */
+function sealRolesByType(type: SealType): ApproverRole[] {
+  if (type === "department") return ["manager"];
+  if (type === "contract" || type === "finance") return ["manager", "director"];
+  return ["manager", "director", "ceo"];
+}
+
+/**
+ * 构造公章审批步骤。
+ */
+export async function buildSealSteps(type: SealType, department: string, applicantId?: string): Promise<FlowStep[]> {
+  const roles = sealRolesByType(type);
+  const steps: FlowStep[] = [];
+  const usedApproverIds = new Set<string>();
+  for (let i = 0; i < roles.length; i++) {
+    const approver = await findApproverByRole(roles[i], department, applicantId);
+    if (!approver || usedApproverIds.has(approver.id)) continue;
+    usedApproverIds.add(approver.id);
+    steps.push({
+      order: i,
+      approverId: approver.id,
+      approverName: approver.name,
+      approverRole: roles[i],
+      status: "pending",
+    });
   }
   return steps;
 }

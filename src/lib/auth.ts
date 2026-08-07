@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import type { NextRequest } from "next/server";
 
 export const SESSION_COOKIE = "fanshen_oa_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 8;
@@ -50,3 +51,16 @@ export const sessionCookieOptions = {
   path: "/",
   maxAge: SESSION_DURATION_SECONDS,
 };
+
+/**
+ * 从请求中解析会话（双模式）：
+ *  - Web 端：HttpOnly Cookie（fanshen_oa_session）
+ *  - 小程序端：Authorization: Bearer <token>
+ */
+export async function getSessionFromRequest(request: NextRequest | Request): Promise<SessionUser | null> {
+  const cookieToken = (request as NextRequest).cookies?.get(SESSION_COOKIE)?.value;
+  const authHeader = request.headers.get("authorization");
+  const headerToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  const token = cookieToken || headerToken;
+  return token ? readSession(token) : null;
+}
